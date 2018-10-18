@@ -26,9 +26,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 using System.Security.Permissions;
 using System.Text;
 using System.Threading;
@@ -210,8 +212,14 @@ namespace SharedMemory
                 if (IsOwnerOfSharedMemory)
                 {
                     // Create a new shared memory mapping
+#if NET45 || NET40
+                    var security = new MemoryMappedFileSecurity();
+                    security.AddAccessRule(new AccessRule<MemoryMappedFileRights>("everyone", MemoryMappedFileRights.FullControl, AccessControlType.Allow));
+                    Mmf = MemoryMappedFile.CreateNew(Name, SharedMemorySize, MemoryMappedFileAccess.ReadWrite,
+                        MemoryMappedFileOptions.DelayAllocatePages, security, HandleInheritability.Inheritable);
+#else
                     Mmf = MemoryMappedFile.CreateNew(Name, SharedMemorySize);
-
+#endif
                     // Create a view to the entire region of the shared memory
                     View = Mmf.CreateViewAccessor(0, SharedMemorySize, MemoryMappedFileAccess.ReadWrite);
                     View.SafeMemoryMappedViewHandle.AcquirePointer(ref ViewPtr);
@@ -334,9 +342,9 @@ namespace SharedMemory
         {
         }
 
-        #endregion
+#endregion
 
-        #region Writing
+#region Writing
 
         /// <summary>
         /// Writes an instance of <typeparamref name="T"/> into the buffer
@@ -414,9 +422,9 @@ namespace SharedMemory
             writeFunc(new IntPtr(BufferStartPtr + bufferPosition));
         }
 
-        #endregion
+#endregion
 
-        #region Reading
+#region Reading
 
         /// <summary>
         /// Reads an instance of <typeparamref name="T"/> from the buffer
@@ -481,9 +489,9 @@ namespace SharedMemory
             readFunc(new IntPtr(BufferStartPtr + bufferPosition));
         }
 
-        #endregion
+#endregion
 
-        #region IDisposable
+#region IDisposable
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
@@ -506,6 +514,6 @@ namespace SharedMemory
             }
         }
 
-        #endregion
+#endregion
     }
 }
