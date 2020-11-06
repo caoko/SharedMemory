@@ -30,6 +30,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Permissions;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 
@@ -60,6 +61,18 @@ namespace SharedMemory
         /// </summary>
         protected EventWaitHandle ReadWaitEvent { get; private set; }
 
+#if NETFULL
+        private static EventWaitHandleSecurity CreateDefaultWaitHandleSecurity()
+        {
+            EventWaitHandleSecurity eventWaitHandleSecurity = new EventWaitHandleSecurity();
+            eventWaitHandleSecurity.AddAccessRule(new EventWaitHandleAccessRule(new SecurityIdentifier(WellKnownSidType.WorldSid, null), 
+                EventWaitHandleRights.FullControl, AccessControlType.Allow));
+            return eventWaitHandleSecurity;
+        }
+
+        private static readonly EventWaitHandleSecurity waitHandleSecurity = CreateDefaultWaitHandleSecurity();
+#endif
+
         #region Constructors
 
         /// <summary>
@@ -79,11 +92,7 @@ namespace SharedMemory
             }
             else
             {
-                WriteWaitEvent = new EventWaitHandle(true, EventResetMode.ManualReset, Name + "_evt_write");
-                var writeSecurity = new EventWaitHandleSecurity();
-                writeSecurity.SetAccessRule(new EventWaitHandleAccessRule("everyone", EventWaitHandleRights.FullControl,
-                    AccessControlType.Allow));
-                WriteWaitEvent.SetAccessControl(writeSecurity);
+                WriteWaitEvent = new EventWaitHandle(true, EventResetMode.ManualReset, Name + "_evt_write", out _, waitHandleSecurity);
             }
             EventWaitHandle readWaitEvent;
             if (EventWaitHandle.TryOpenExisting(Name + "_evt_read", out readWaitEvent))
@@ -92,23 +101,11 @@ namespace SharedMemory
             }
             else
             {
-                ReadWaitEvent = new EventWaitHandle(true, EventResetMode.ManualReset, Name + "_evt_read");
-                var readSecurity = new EventWaitHandleSecurity();
-                readSecurity.SetAccessRule(new EventWaitHandleAccessRule("everyone", EventWaitHandleRights.FullControl,
-                    AccessControlType.Allow));
-                ReadWaitEvent.SetAccessControl(readSecurity);
+                ReadWaitEvent = new EventWaitHandle(true, EventResetMode.ManualReset, Name + "_evt_read", out _, waitHandleSecurity);
             }
 #elif NET40 || NET35
-            WriteWaitEvent = new EventWaitHandle(true, EventResetMode.ManualReset, Name + "_evt_write");
-            var writeSecurity = new EventWaitHandleSecurity();
-            writeSecurity.SetAccessRule(new EventWaitHandleAccessRule("everyone", EventWaitHandleRights.FullControl,
-                AccessControlType.Allow));
-            WriteWaitEvent.SetAccessControl(writeSecurity);
-            ReadWaitEvent = new EventWaitHandle(true, EventResetMode.ManualReset, Name + "_evt_read");
-            var readSecurity = new EventWaitHandleSecurity();
-            readSecurity.SetAccessRule(new EventWaitHandleAccessRule("everyone", EventWaitHandleRights.FullControl,
-                AccessControlType.Allow));
-            ReadWaitEvent.SetAccessControl(readSecurity);
+            WriteWaitEvent = new EventWaitHandle(true, EventResetMode.ManualReset, Name + "_evt_write", out _, waitHandleSecurity);
+            ReadWaitEvent = new EventWaitHandle(true, EventResetMode.ManualReset, Name + "_evt_read", out _, waitHandleSecurity);
 #elif NETCORE
             EventWaitHandle writeWaitEvent;
             if (EventWaitHandle.TryOpenExisting(Name + "_evt_write", out writeWaitEvent))

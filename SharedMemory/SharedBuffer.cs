@@ -32,6 +32,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Permissions;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 
@@ -193,6 +194,28 @@ namespace SharedMemory
 
         #region Open / Close
 
+#if NETFULL
+        private static readonly WellKnownSidType[] defaultAllowedList = {
+            WellKnownSidType.CreatorOwnerSid,
+            WellKnownSidType.BuiltinAdministratorsSid,
+            WellKnownSidType.LocalSystemSid,
+            WellKnownSidType.LocalServiceSid,
+            WellKnownSidType.NetworkServiceSid,
+            WellKnownSidType.WorldSid
+        };
+
+        private FileSecurity BuildSecurityDescriptor(IEnumerable<WellKnownSidType> allowedList)
+        {
+            FileSecurity fileSecurity = new FileSecurity();
+            foreach (WellKnownSidType allowed in allowedList)
+            {
+                SecurityIdentifier identity = new SecurityIdentifier(allowed, null);
+                fileSecurity.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, AccessControlType.Allow));
+            }
+            return fileSecurity;
+        }
+#endif
+
         /// <summary>
         /// Creates a new or opens an existing shared memory buffer with the name of <see cref="Name"/> depending on the value of <see cref="IsOwnerOfSharedMemory"/>. 
         /// </summary>
@@ -212,11 +235,11 @@ namespace SharedMemory
                 if (IsOwnerOfSharedMemory)
                 {
                     // Create a new shared memory mapping
-#if NET45 || NET40
-                    var security = new MemoryMappedFileSecurity();
-                    security.AddAccessRule(new AccessRule<MemoryMappedFileRights>("everyone", MemoryMappedFileRights.FullControl, AccessControlType.Allow));
+#if NETFULL && !(NET35)
+                    MemoryMappedFileSecurity memoryMappedFileSecurity = new MemoryMappedFileSecurity();
+                    memoryMappedFileSecurity.SetSecurityDescriptorBinaryForm(BuildSecurityDescriptor(defaultAllowedList).GetSecurityDescriptorBinaryForm());
                     Mmf = MemoryMappedFile.CreateNew(Name, SharedMemorySize, MemoryMappedFileAccess.ReadWrite,
-                        MemoryMappedFileOptions.DelayAllocatePages, security, HandleInheritability.Inheritable);
+                        MemoryMappedFileOptions.DelayAllocatePages, memoryMappedFileSecurity, HandleInheritability.Inheritable);
 #else
                     Mmf = MemoryMappedFile.CreateNew(Name, SharedMemorySize);
 #endif
